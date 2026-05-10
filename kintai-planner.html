@@ -755,13 +755,24 @@ function clearPeriod(){
   saveToStorage(); renderAll();
 }
 
-function prevMonth(){ currentMonth--; if(currentMonth===0){currentMonth=12;currentYear--;} renderAll(); }
-function nextMonth(){ currentMonth++; if(currentMonth===13){currentMonth=1;currentYear++;} renderAll(); }
+function saveCurrentMonth(){
+  try{ localStorage.setItem(STORAGE_KEY+'-month', JSON.stringify({y:currentYear,m:currentMonth})); }catch(e){}
+}
+function loadCurrentMonth(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY+'-month');
+    if(raw){ const {y,m}=JSON.parse(raw); currentYear=y; currentMonth=m; }
+  }catch(e){}
+}
+
+function prevMonth(){ currentMonth--; if(currentMonth===0){currentMonth=12;currentYear--;} saveCurrentMonth(); renderAll(); }
+function nextMonth(){ currentMonth++; if(currentMonth===13){currentMonth=1;currentYear++;} saveCurrentMonth(); renderAll(); }
 
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeModal(); closeRestoreModal(); } });
 
 // ===== 起動 =====
 loadFromStorage();
+loadCurrentMonth();
 renderAll();
 </script>
 </body>
