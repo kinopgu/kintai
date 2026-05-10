@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>勤怠プランナー</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap');
+  :root {
+    --bg:#f5f3ee; --surface:#fff; --surface2:#f0ede6; --border:#ddd9cf;
+    --text:#2a2520; --muted:#8a837a;
+    --accent:#2d6a4f; --accent-light:#d8f3dc;
+    --warn:#e07a3a;  --warn-light:#fdebd0;
+    --danger:#c0392b; --danger-light:#fce4e1;
+    --ok:#2d6a4f;
+    --memo:#6b4fad; --memo-light:#ede8f8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:20px 14px 60px;user-select:none;-webkit-user-select:none;}
+  h1{font-size:1.25rem;font-weight:700;margin-bottom:3px;}
+  .subtitle{font-size:0.76rem;color:var(--muted);margin-bottom:18px;}
+
+  /* パネル共通 */
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:14px;}
+
+  /* 設定バー */
+  .settings-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;}
+  .settings-bar label{font-size:0.72rem;color:var(--muted);display:block;margin-bottom:3px;font-weight:500;}
+  .settings-bar input,.settings-bar select{font-family:'DM Mono',monospace;font-size:0.88rem;border:1.5px solid var(--border);border-radius:8px;padding:6px 9px;background:var(--bg);color:var(--text);width:100%;outline:none;}
+  .field{flex:1;min-width:110px;}
+
+  /* 有給パネル */
+  .yukyuu-panel{display:flex;flex-wrap:wrap;gap:14px;align-items:center;}
+  .ystat{display:flex;flex-direction:column;gap:2px;}
+  .ystat span:first-child{font-size:0.71rem;color:var(--muted);font-weight:500;}
+  .ystat span:last-child{font-family:'DM Mono',monospace;font-size:1.35rem;font-weight:500;color:var(--accent);}
+  .ydiv{width:1px;height:34px;background:var(--border);}
+  .yinput-wrap{display:flex;align-items:center;gap:7px;}
+  .yinput-wrap input{width:68px;font-family:'DM Mono';font-size:0.95rem;border:1.5px solid var(--border);border-radius:8px;padding:6px 7px;background:var(--bg);outline:none;}
+
+  /* 月ナビ */
+  .month-nav{display:flex;align-items:center;gap:9px;margin-bottom:11px;flex-wrap:wrap;}
+  .month-nav button{background:var(--surface);border:1.5px solid var(--border);border-radius:8px;width:34px;height:34px;font-size:0.95rem;cursor:pointer;color:var(--text);display:flex;align-items:center;justify-content:center;}
+  .month-nav button:hover{background:var(--surface2);}
+  .month-label{font-size:1rem;font-weight:700;font-family:'DM Mono',monospace;}
+  .period-label{font-size:0.7rem;color:var(--muted);}
+
+  /* ステータスバー */
+  .status-bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;}
+  .sitem{display:flex;flex-direction:column;gap:1px;}
+  .slabel{font-size:0.7rem;color:var(--muted);font-weight:500;}
+  .sval{font-family:'DM Mono',monospace;font-size:1.15rem;font-weight:500;}
+  .sval.ok{color:var(--ok);} .sval.warn{color:var(--warn);} .sval.danger{color:var(--danger);}
+  .smsg{flex:1;text-align:right;font-size:0.78rem;font-weight:500;padding:4px 10px;border-radius:20px;min-width:90px;}
+  .smsg.ok{background:var(--accent-light);color:var(--ok);}
+  .smsg.warn{background:var(--warn-light);color:var(--warn);}
+  .smsg.over{background:var(--danger-light);color:var(--danger);}
+
+  /* 凡例 */
+  .legend{display:flex;gap:10px;flex-wrap:wrap;font-size:0.7rem;color:var(--muted);margin-bottom:11px;}
+  .legend-item{display:flex;align-items:center;gap:4px;}
+  .ldot{width:11px;height:11px;border-radius:3px;flex-shrink:0;}
+
+  /* カレンダー */
+  .cal-wrap{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:13px;}
+  .cal-head{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--border);}
+  .cal-head div{text-align:center;font-size:0.7rem;font-weight:700;padding:9px 3px;}
+  .cal-head div:first-child{color:var(--danger);}
+  .cal-head div:last-child{color:#3a6bc4;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);}
+
+  .cell{border:0.5px solid var(--border);min-height:68px;padding:4px 3px;display:flex;flex-direction:column;align-items:center;gap:2px;position:relative;cursor:pointer;transition:filter 0.1s;-webkit-touch-callout:none;}
+  .cell.non-period{background:#f8f7f4;cursor:default;opacity:0.38;}
+  .cell.hol{background:#faf5f5;cursor:default;}
+  .cell.hol .dnum{color:var(--danger);}
+  .cell.sun{cursor:default;} .cell.sun .dnum{color:var(--danger);}
+  .cell.sat{cursor:default;} .cell.sat .dnum{color:#3a6bc4;}
+  .cell.shukkin{background:var(--accent-light);}
+  .cell.yukyuu{background:var(--warn-light);}
+  .cell.shukkin .dnum{color:var(--ok);font-weight:700;}
+  .cell.yukyuu .dnum{color:var(--warn);font-weight:700;}
+  .cell.has-memo{outline:2px solid var(--memo);outline-offset:-2px;}
+  .cell.month-start{border-left:3px solid #b0c4b8;}
+  .cell:not(.non-period):not(.hol):not(.sun):not(.sat):hover{filter:brightness(0.95);}
+
+  .memo-bar{position:absolute;top:0;left:0;right:0;height:3px;background:var(--memo);}
+  .dnum{font-family:'DM Mono',monospace;font-size:0.82rem;font-weight:500;line-height:1;margin-top:5px;}
+  .montag{font-size:0.55rem;color:var(--muted);background:var(--surface2);padding:1px 3px;border-radius:3px;}
+  .dbadge{font-size:0.57rem;padding:2px 4px;border-radius:3px;font-weight:700;text-align:center;}
+  .b-shukkin{background:var(--accent);color:#fff;}
+  .b-yukyuu{background:var(--warn);color:#fff;}
+  .b-hol{background:#ecdcdc;color:var(--danger);}
+  .memo-preview{font-size:0.52rem;color:var(--memo);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;font-weight:600;padding:0 2px;}
+
+  /* 週別サマリー */
+  .week-sum{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:13px;}
+  .wsum-title{font-size:0.75rem;font-weight:700;padding:9px 13px;border-bottom:1px solid var(--border);color:var(--muted);}
+  .wrow{display:flex;align-items:center;padding:7px 13px;border-bottom:0.5px solid var(--border);gap:9px;}
+  .wrow:last-child{border-bottom:none;}
+  .wlabel{width:50px;font-family:'DM Mono',monospace;font-size:0.72rem;color:var(--muted);}
+  .wdays{flex:1;display:flex;gap:3px;flex-wrap:wrap;}
+  .chip{font-size:0.65rem;padding:2px 4px;border-radius:4px;font-weight:500;}
+  .c-shukkin{background:var(--accent-light);color:var(--ok);}
+  .c-yukyuu{background:var(--warn-light);color:var(--warn);}
+  .c-off{background:var(--surface2);color:var(--muted);}
+  .c-out{opacity:0.28;background:var(--bg);color:var(--muted);}
+  .c-memo{border-bottom:2px solid var(--memo);}
+  .wcount{font-family:'DM Mono',monospace;font-size:0.83rem;font-weight:700;min-width:46px;text-align:right;}
+  .wcount.ok{color:var(--ok);} .wcount.over{color:var(--danger);}
+  .wtag{font-size:0.62rem;color:var(--danger);font-weight:700;}
+
+  /* ボタン群 */
+  .action-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;}
+  .btn{font-family:'Noto Sans JP',sans-serif;font-size:0.8rem;font-weight:700;padding:9px 14px;border-radius:8px;border:none;cursor:pointer;transition:opacity .15s,transform .1s;}
+  .btn:active{transform:scale(0.97);}
+  .btn-primary{background:var(--accent);color:#fff;}
+  .btn-secondary{background:var(--surface);color:var(--text);border:1.5px solid var(--border);}
+  .btn-danger{background:var(--danger);color:#fff;}
+  .btn-memo{background:var(--memo);color:#fff;}
+  .btn:hover{opacity:0.85;}
+
+  /* バックアップ行 */
+  .backup-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:18px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;}
+  .backup-label{font-size:0.73rem;color:var(--muted);font-weight:500;flex-basis:100%;}
+  .save-status{font-size:0.68rem;color:var(--muted);margin-left:auto;}
+  .save-status.saved{color:var(--ok);}
+
+  /* モーダル */
+  .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.38);z-index:100;}
+  .overlay.show{display:block;}
+  .modal{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:16px;border:1.5px solid var(--border);padding:20px 18px;z-index:101;width:320px;box-shadow:0 8px 32px rgba(0,0,0,0.14);}
+  .modal.show{display:block;}
+  .modal-title{font-weight:700;font-size:0.97rem;margin-bottom:3px;}
+  .modal-sub{font-size:0.72rem;color:var(--muted);margin-bottom:12px;}
+  .range-row{display:flex;align-items:flex-end;gap:7px;margin-bottom:12px;flex-wrap:wrap;}
+  .rfield{flex:1;min-width:100px;}
+  .rfield label{font-size:0.7rem;color:var(--muted);font-weight:500;display:block;margin-bottom:3px;}
+  .rfield select{font-family:'DM Mono',monospace;font-size:0.82rem;border:1.5px solid var(--border);border-radius:8px;padding:6px 7px;background:var(--bg);color:var(--text);outline:none;width:100%;}
+  .rarrow{color:var(--muted);font-size:1.1rem;padding-bottom:4px;}
+  .modal textarea{width:100%;height:78px;border:1.5px solid var(--border);border-radius:8px;padding:7px 9px;font-family:'Noto Sans JP',sans-serif;font-size:0.83rem;resize:none;outline:none;background:var(--bg);color:var(--text);line-height:1.6;user-select:text;-webkit-user-select:text;}
+  .modal textarea:focus{border-color:var(--memo);}
+  .modal-hint{font-size:0.68rem;color:var(--muted);margin-top:5px;margin-bottom:12px;}
+  .modal-btns{display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap;}
+  .modal-btns .btn{padding:7px 13px;font-size:0.78rem;}
+
+  /* メモ一覧 */
+  .memo-list-sec{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:18px;}
+  .mlist-title{font-size:0.75rem;font-weight:700;padding:9px 13px;border-bottom:1px solid var(--border);color:var(--muted);}
+  .mlist-empty{padding:13px;font-size:0.78rem;color:var(--muted);text-align:center;}
+  .mitem{display:flex;align-items:flex-start;gap:9px;padding:9px 13px;border-bottom:0.5px solid var(--border);}
+  .mitem:last-child{border-bottom:none;}
+  .mitem-date{font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--memo);font-weight:600;min-width:90px;padding-top:2px;line-height:1.4;}
+  .mitem-text{flex:1;font-size:0.78rem;line-height:1.5;color:var(--text);}
+  .mitem-del{background:none;border:none;cursor:pointer;font-size:0.72rem;color:var(--muted);padding:2px 5px;border-radius:4px;flex-shrink:0;}
+  .mitem-del:hover{background:var(--danger-light);color:var(--danger);}
+
+  @media(max-width:480px){
+    .cell{min-height:54px;padding:3px 2px;}
+    .dnum{font-size:0.75rem;}
+    .dbadge{display:none;}
+    .memo-preview{display:none;}
+    .modal{width:calc(100vw - 28px);}
+  }
+</style>
+</head>
+<body>
+
+<h1>📅 勤怠プランナー</h1>
+<p class="subtitle">10日締め・週4契約・月17日出勤目標</p>
+
+<!-- 設定 -->
+<div class="panel">
+  <div class="settings-bar">
+    <div class="field">
+      <label>目標出勤日数</label>
+      <input type="number" id="target" value="17" min="1" max="31" onchange="renderAll()">
+    </div>
+    <div class="field" style="min-width:140px">
+      <label>週の契約日数</label>
+      <select id="weekly-contract" onchange="renderAll()">
+        <option value="3">週3日</option>
+        <option value="4" selected>週4日</option>
+        <option value="5">週5日</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- 有給 -->
+<div class="panel">
+  <div class="yukyuu-panel">
+    <div class="ystat"><span>有給付与（年間）</span><span id="yd-total">—</span></div>
+    <div class="yinput-wrap">
+      <input type="number" id="yukyuu-total" placeholder="例：10" min="0" max="40">
+      <button class="btn btn-secondary" onclick="setYukyuuTotal()" style="padding:6px 11px;font-size:0.75rem">設定</button>
+    </div>
+    <div class="ydiv"></div>
+    <div class="ystat"><span>今年度使用</span><span id="yd-used">0日</span></div>
+    <div class="ydiv"></div>
+    <div class="ystat"><span>残日数</span><span id="yd-remain" style="color:var(--warn)">—</span></div>
+  </div>
+</div>
+
+<!-- バックアップ -->
+<div class="backup-row">
+  <span class="backup-label">💾 データ管理　<span style="font-weight:400;font-size:0.68rem">バックアップはコピーしてメモアプリ等に貼り付けて保存してください</span></span>
+  <button class="btn btn-secondary" onclick="copyBackup()">📋 バックアップをコピー</button>
+  <button class="btn btn-secondary" onclick="openRestoreModal()">📤 バックアップから復元</button>
+  <button class="btn btn-secondary" onclick="reloadPage()">🔄 更新</button>
+  <span class="save-status" id="save-status"></span>
+</div>
+
+<!-- 復元モーダル -->
+<div class="overlay" id="restore-overlay" onclick="closeRestoreModal()"></div>
+<div class="modal" id="restore-modal">
+  <div class="modal-title">バックアップから復元</div>
+  <div class="modal-sub">コピーしておいたバックアップデータを下に貼り付けてください</div>
+  <textarea id="restore-text" style="width:100%;height:120px;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-family:'DM Mono',monospace;font-size:0.72rem;resize:none;outline:none;background:var(--bg);color:var(--text);line-height:1.5;user-select:text;-webkit-user-select:text;" placeholder="ここにバックアップデータを貼り付け…"></textarea>
+  <div class="modal-btns" style="margin-top:12px;">
+    <button class="btn btn-secondary" onclick="closeRestoreModal()">キャンセル</button>
+    <button class="btn btn-primary" onclick="restoreFromText()">復元する</button>
+  </div>
+</div>
+
+<!-- 月ナビ -->
+<div class="month-nav">
+  <button onclick="prevMonth()">◀</button>
+  <span class="month-label" id="month-label"></span>
+  <button onclick="nextMonth()">▶</button>
+  <span class="period-label" id="period-label"></span>
+</div>
+
+<!-- ステータス -->
+<div class="panel">
+  <div class="status-bar">
+    <div class="sitem"><span class="slabel">出勤</span><span class="sval" id="st-shukkin">0日</span></div>
+    <div class="sitem"><span class="slabel">有給</span><span class="sval" id="st-yukyuu">0日</span></div>
+    <div class="sitem"><span class="slabel">合計</span><span class="sval" id="st-total">0日</span></div>
+    <div class="sitem"><span class="slabel">目標まで</span><span class="sval" id="st-remain">17日</span></div>
+    <div class="smsg warn" id="st-msg">入力してください</div>
+  </div>
+</div>
+
+<!-- 凡例 -->
+<div class="legend">
+  <div class="legend-item"><div class="ldot" style="background:var(--accent-light);border:1px solid var(--accent)"></div>出勤</div>
+  <div class="legend-item"><div class="ldot" style="background:var(--warn-light);border:1px solid var(--warn)"></div>有給</div>
+  <div class="legend-item"><div class="ldot" style="background:#faf5f5;border:1px solid #e0d0d0"></div>祝日・休日</div>
+  <div class="legend-item"><div class="ldot" style="background:var(--memo-light);border:2px solid var(--memo)"></div>メモあり</div>
+  <div class="legend-item" style="font-size:0.68rem">タップ→出勤/有給/なし　長押し→メモ</div>
+</div>
+
+<!-- カレンダー -->
+<div class="cal-wrap">
+  <div class="cal-head">
+    <div>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div>
+  </div>
+  <div class="cal-grid" id="cal-grid"></div>
+</div>
+
+<!-- アクション -->
+<div class="action-row">
+  <button class="btn btn-primary" onclick="autoFill()">🤖 自動で17日に埋める</button>
+  <button class="btn btn-secondary" onclick="clearPeriod()">🗑 この期間をリセット</button>
+</div>
+
+<!-- 週別サマリー -->
+<div class="week-sum">
+  <div class="wsum-title">週別 勤務状況</div>
+  <div id="week-body"></div>
+</div>
+
+<!-- メモ一覧 -->
+<div class="memo-list-sec">
+  <div class="mlist-title">📝 メモ一覧</div>
+  <div id="memo-list"></div>
+</div>
+
+<!-- メモモーダル -->
+<div class="overlay" id="overlay" onclick="closeModal()"></div>
+<div class="modal" id="modal">
+  <div class="modal-title" id="modal-title">メモを追加</div>
+  <div class="modal-sub">複数日にわたる予定は日付範囲で一括登録できます</div>
+  <div class="range-row">
+    <div class="rfield"><label>開始日</label><select id="rng-start"></select></div>
+    <div class="rarrow">→</div>
+    <div class="rfield"><label>終了日</label><select id="rng-end"></select></div>
+  </div>
+  <textarea id="modal-text" placeholder="例：北海道旅行、友人の結婚式など"></textarea>
+  <div class="modal-hint">※メモがある日はカレンダーに紫の枠で表示されます</div>
+  <div class="modal-btns">
+    <button class="btn btn-danger" id="btn-del-memo" onclick="deleteMemo()" style="display:none">削除</button>
+    <button class="btn btn-secondary" onclick="closeModal()">キャンセル</button>
+    <button class="btn btn-memo" onclick="saveMemo()">保存</button>
+  </div>
+</div>
+
+<script>
+// ===== 状態 =====
+let currentYear  = new Date().getFullYear();
+let currentMonth = new Date().getMonth() + 1; // 1-indexed
+let dayStates    = {};   // "YYYY-MM-DD" -> "shukkin"|"yukyuu"
+let memos        = [];   // [{id,startKey,endKey,text}, ...]
+let yukyuuTotal  = null;
+let pressTimer   = null;
+let editMemoId   = null; // 編集中メモのid
+const LONG_MS    = 500;
+const STORAGE_KEY = 'kintai-planner-v1';
+
+// ===== 祝日 =====
+const HOLIDAYS = {
+  "2025-01-01":"元日","2025-01-13":"成人の日","2025-02-11":"建国記念日","2025-02-23":"天皇誕生日",
+  "2025-03-20":"春分の日","2025-04-29":"昭和の日","2025-05-03":"憲法記念日","2025-05-04":"みどりの日",
+  "2025-05-05":"こどもの日","2025-05-06":"振替休日","2025-07-21":"海の日","2025-08-11":"山の日",
+  "2025-09-15":"敬老の日","2025-09-23":"秋分の日","2025-10-13":"スポーツの日",
+  "2025-11-03":"文化の日","2025-11-23":"勤労感謝の日","2025-11-24":"振替休日",
+  "2026-01-01":"元日","2026-01-12":"成人の日","2026-02-11":"建国記念日","2026-02-23":"天皇誕生日",
+  "2026-03-20":"春分の日","2026-04-29":"昭和の日","2026-05-03":"憲法記念日","2026-05-04":"みどりの日",
+  "2026-05-05":"こどもの日","2026-07-20":"海の日","2026-08-11":"山の日","2026-09-21":"敬老の日",
+  "2026-09-22":"国民の休日","2026-09-23":"秋分の日","2026-10-12":"スポーツの日",
+  "2026-11-03":"文化の日","2026-11-23":"勤労感謝の日",
+  "2027-01-01":"元日","2027-01-11":"成人の日","2027-02-11":"建国記念日","2027-02-23":"天皇誕生日",
+  "2027-03-21":"春分の日","2027-04-29":"昭和の日","2027-05-03":"憲法記念日","2027-05-04":"みどりの日",
+  "2027-05-05":"こどもの日","2027-07-19":"海の日","2027-08-11":"山の日","2027-09-20":"敬老の日",
+  "2027-09-23":"秋分の日","2027-10-11":"スポーツの日","2027-11-03":"文化の日","2027-11-23":"勤労感謝の日"
+};
+
+function pad(n){ return String(n).padStart(2,'0'); }
+function dk(y,m,d){ return `${y}-${pad(m)}-${pad(d)}`; }
+function keyDate(k){ const [y,m,d]=k.split('-').map(Number); return new Date(y,m-1,d); }
+function dateKey(dt){ return dk(dt.getFullYear(),dt.getMonth()+1,dt.getDate()); }
+
+function isHoliday(y,m,d){
+  const k=dk(y,m,d); if(HOLIDAYS[k]) return HOLIDAYS[k];
+  if(m===8&&d>=11&&d<=15) return "お盆";
+  if(m===12&&d>=29) return "年末休み";
+  if(m===1&&d>=2&&d<=3) return "年始休み";
+  return null;
+}
+
+// 給与月 → 集計期間（前月11日〜当月10日）
+function getPeriod(y,m){
+  let sy=y,sm=m-1; if(sm===0){sm=12;sy=y-1;}
+  return {start:new Date(sy,sm-1,11), end:new Date(y,m-1,10), sy, sm};
+}
+function getPeriodDays(y,m){
+  const {start,end}=getPeriod(y,m);
+  const days=[],cur=new Date(start);
+  while(cur<=end){days.push(new Date(cur));cur.setDate(cur.getDate()+1);}
+  return days;
+}
+
+// 日付keyにかかるメモ一覧
+function memosForKey(k){
+  const kd=keyDate(k);
+  return memos.filter(m=>{ const s=keyDate(m.startKey),e=keyDate(m.endKey); return kd>=s&&kd<=e; });
+}
+
+function getTarget(){ return parseInt(document.getElementById('target').value)||17; }
+function getContract(){ return parseInt(document.getElementById('weekly-contract').value)||4; }
+
+// ===== ローカルストレージ =====
+function saveToStorage(){
+  try{
+    const data={dayStates,memos,yukyuuTotal,
+      target:document.getElementById('target').value,
+      contract:document.getElementById('weekly-contract').value,
+      savedAt:new Date().toISOString()};
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(data));
+    const el=document.getElementById('save-status');
+    const now=new Date();
+    el.textContent=`自動保存済 ${now.getHours()}:${pad(now.getMinutes())}`;
+    el.className='save-status saved';
+  }catch(e){}
+}
+
+function loadFromStorage(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw) return;
+    const data=JSON.parse(raw);
+    if(data.dayStates) dayStates=data.dayStates;
+    if(data.memos)     memos=data.memos;
+    if(data.yukyuuTotal!=null){ yukyuuTotal=data.yukyuuTotal; document.getElementById('yukyuu-total').value=yukyuuTotal; document.getElementById('yd-total').textContent=yukyuuTotal+'日'; }
+    if(data.target)   document.getElementById('target').value=data.target;
+    if(data.contract) document.getElementById('weekly-contract').value=data.contract;
+    const el=document.getElementById('save-status');
+    if(data.savedAt){
+      const d=new Date(data.savedAt);
+      el.textContent=`前回保存: ${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${pad(d.getMinutes())}`;
+      el.className='save-status';
+    }
+  }catch(e){}
+}
+
+// ===== コピー方式バックアップ =====
+function copyBackup(){
+  const data={dayStates,memos,yukyuuTotal,
+    target:document.getElementById('target').value,
+    contract:document.getElementById('weekly-contract').value,
+    savedAt:new Date().toISOString()};
+  const text=JSON.stringify(data);
+  navigator.clipboard.writeText(text).then(()=>{
+    alert('クリップボードにコピーしました！\nメモアプリやLINEのKeepメモなどに貼り付けて保存してください。');
+  }).catch(()=>{
+    // フォールバック：テキストエリアに表示
+    openRestoreModal(text);
+    alert('自動コピーできませんでした。\n表示されたテキストを長押しで全選択してコピーしてください。');
+  });
+}
+
+function openRestoreModal(prefill){
+  document.getElementById('restore-text').value = prefill||'';
+  document.getElementById('restore-overlay').classList.add('show');
+  document.getElementById('restore-modal').classList.add('show');
+  setTimeout(()=>document.getElementById('restore-text').focus(),100);
+}
+
+function closeRestoreModal(){
+  document.getElementById('restore-overlay').classList.remove('show');
+  document.getElementById('restore-modal').classList.remove('show');
+}
+
+function restoreFromText(){
+  const txt=document.getElementById('restore-text').value.trim();
+  if(!txt){ alert('データが入力されていません。'); return; }
+  try{
+    const data=JSON.parse(txt);
+    if(data.dayStates) dayStates=data.dayStates;
+    if(data.memos)     memos=data.memos;
+    if(data.yukyuuTotal!=null){ yukyuuTotal=data.yukyuuTotal; document.getElementById('yukyuu-total').value=yukyuuTotal; document.getElementById('yd-total').textContent=yukyuuTotal+'日'; }
+    if(data.target)   document.getElementById('target').value=data.target;
+    if(data.contract) document.getElementById('weekly-contract').value=data.contract;
+    saveToStorage();
+    closeRestoreModal();
+    renderAll();
+    alert('復元が完了しました！');
+  }catch(e){ alert('データの形式が正しくありません。\nバックアップのテキストをそのまま貼り付けてください。'); }
+}
+
+function reloadPage(){ location.reload(); }
+
+// ===== 有給 =====
+function setYukyuuTotal(){
+  const v=parseInt(document.getElementById('yukyuu-total').value);
+  if(isNaN(v)||v<0) return;
+  yukyuuTotal=v; document.getElementById('yd-total').textContent=v+'日';
+  saveToStorage(); renderAll();
+}
+
+function countPeriod(y,m){
+  let s=0,u=0;
+  getPeriodDays(y,m).forEach(d=>{ const k=dk(d.getFullYear(),d.getMonth()+1,d.getDate()); if(dayStates[k]==='shukkin')s++; if(dayStates[k]==='yukyuu')u++; });
+  return {shukkin:s,yukyuu:u};
+}
+
+// ===== メインレンダリング =====
+function renderAll(){ renderCalendar(); renderStatus(); renderWeekSummary(); renderYukyuu(); renderMemoList(); }
+
+function renderYukyuu(){
+  const used=Object.values(dayStates).filter(v=>v==='yukyuu').length;
+  document.getElementById('yd-used').textContent=used+'日';
+  if(yukyuuTotal!=null){
+    const rem=yukyuuTotal-used;
+    const el=document.getElementById('yd-remain');
+    el.textContent=rem+'日';
+    el.style.color=rem<=2?'var(--danger)':rem<=5?'var(--warn)':'var(--ok)';
+  }
+}
+
+// ===== カレンダー =====
+function renderCalendar(){
+  const y=currentYear,m=currentMonth;
+  const {start,end,sy,sm}=getPeriod(y,m);
+  document.getElementById('month-label').textContent=`${y}年${m}月分`;
+  document.getElementById('period-label').textContent=`${sy}/${pad(sm)}/11 〜 ${y}/${pad(m)}/10`;
+
+  const calStart=new Date(start); calStart.setDate(calStart.getDate()-calStart.getDay());
+  const calEnd  =new Date(end);   calEnd.setDate(calEnd.getDate()+(6-calEnd.getDay()));
+
+  const grid=document.getElementById('cal-grid'); grid.innerHTML='';
+  let prevM=null; const cur=new Date(calStart); const DOW=['日','月','火','水','木','金','土'];
+
+  while(cur<=calEnd){
+    const cy=cur.getFullYear(),cm=cur.getMonth()+1,cd=cur.getDate();
+    const dow=cur.getDay();
+    const inPeriod=(cur>=start&&cur<=end);
+    const hol=isHoliday(cy,cm,cd);
+    const isSat=dow===6, isSun=dow===0;
+    const k=dk(cy,cm,cd);
+    const state=dayStates[k];
+    const dayMemos=inPeriod?memosForKey(k):[];
+    const hasMemo=dayMemos.length>0;
+
+    const cell=document.createElement('div');
+    const cls=['cell'];
+    if(!inPeriod){ cls.push('non-period'); }
+    else{
+      if(hol) cls.push('hol');
+      else if(isSun) cls.push('sun');
+      else if(isSat) cls.push('sat');
+      if(state==='shukkin') cls.push('shukkin');
+      if(state==='yukyuu')  cls.push('yukyuu');
+      if(hasMemo) cls.push('has-memo');
+    }
+    if(cd===1) cls.push('month-start');
+    cell.className=cls.join(' ');
+
+    // メモ帯
+    if(inPeriod&&hasMemo){
+      const bar=document.createElement('div'); bar.className='memo-bar'; cell.appendChild(bar);
+    }
+
+    // 日番号
+    const numEl=document.createElement('div'); numEl.className='dnum'; numEl.textContent=cd; cell.appendChild(numEl);
+
+    // 月タグ（月が変わる最初）
+    if(cm!==prevM){ const mt=document.createElement('div'); mt.className='montag'; mt.textContent=`${cm}月`; cell.appendChild(mt); prevM=cm; }
+
+    // バッジ・プレビュー
+    if(inPeriod){
+      if(hol){ const b=document.createElement('div'); b.className='dbadge b-hol'; b.textContent=hol.length>4?hol.slice(0,4):hol; cell.appendChild(b); }
+      else if(state==='shukkin'){ const b=document.createElement('div'); b.className='dbadge b-shukkin'; b.textContent='出勤'; cell.appendChild(b); }
+      else if(state==='yukyuu'){ const b=document.createElement('div'); b.className='dbadge b-yukyuu'; b.textContent='有給'; cell.appendChild(b); }
+      if(hasMemo){ const mp=document.createElement('div'); mp.className='memo-preview'; mp.textContent=dayMemos[0].text.split('\n')[0]; cell.appendChild(mp); }
+
+      // イベント（全inPeriodに長押し。平日のみタップで出勤切替）
+      const _k=k,_y=cy,_m=cm,_d=cd;
+      const clickable=!hol&&!isSat&&!isSun;
+      let didLong=false;
+      const onDown=()=>{ didLong=false; pressTimer=setTimeout(()=>{ didLong=true; openModal(_k,_y,_m,_d); },LONG_MS); };
+      const onUp  =()=>{ if(pressTimer){clearTimeout(pressTimer);pressTimer=null;} if(!didLong&&clickable) toggleDay(_y,_m,_d); };
+      const onCnl =()=>{ if(pressTimer){clearTimeout(pressTimer);pressTimer=null;} };
+      cell.addEventListener('mousedown',onDown);
+      cell.addEventListener('mouseup',onUp);
+      cell.addEventListener('mouseleave',onCnl);
+      cell.addEventListener('touchstart',onDown,{passive:true});
+      cell.addEventListener('touchend',onUp);
+      cell.addEventListener('touchcancel',onCnl);
+    }
+
+    grid.appendChild(cell);
+    cur.setDate(cur.getDate()+1);
+  }
+}
+
+function toggleDay(y,m,d){
+  const k=dk(y,m,d);
+  const cur=dayStates[k];
+  if(!cur) dayStates[k]='shukkin';
+  else if(cur==='shukkin') dayStates[k]='yukyuu';
+  else delete dayStates[k];
+  saveToStorage(); renderAll();
+}
+
+// ===== メモモーダル =====
+function openModal(triggerKey,y,m,d){
+  const DOW=['日','月','火','水','木','金','土'];
+  const dt=new Date(y,m-1,d);
+  document.getElementById('modal-title').textContent=`${y}年${m}月${d}日（${DOW[dt.getDay()]}）`;
+
+  // セレクト生成（前後2ヶ月範囲）
+  buildSelects(triggerKey,y,m);
+
+  // 既存メモ確認
+  const existing=memosForKey(triggerKey);
+  editMemoId=null;
+  if(existing.length>0){
+    const memo=existing[0];
+    editMemoId=memo.id;
+    document.getElementById('modal-text').value=memo.text;
+    document.getElementById('rng-start').value=memo.startKey;
+    document.getElementById('rng-end').value  =memo.endKey;
+    document.getElementById('btn-del-memo').style.display='block';
+  } else {
+    document.getElementById('modal-text').value='';
+    document.getElementById('btn-del-memo').style.display='none';
+  }
+
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('modal').classList.add('show');
+  setTimeout(()=>document.getElementById('modal-text').focus(),100);
+}
+
+function buildSelects(triggerKey, cy,cm){
+  // 前月〜翌月の集計期間日付を選択肢に
+  const allDays=[];
+  for(let mo=-1;mo<=1;mo++){
+    let y= cy,m=cm+mo;
+    if(m<=0){m+=12;y--;} if(m>12){m-=12;y++;}
+    getPeriodDays(y,m).forEach(d=>allDays.push(dateKey(d)));
+  }
+  // 重複除去・ソート
+  const seen=new Set(); const uniq=[];
+  allDays.forEach(k=>{ if(!seen.has(k)){seen.add(k);uniq.push(k);} });
+  uniq.sort();
+
+  const DOW=['日','月','火','水','木','金','土'];
+  function makeOpts(sel){
+    sel.innerHTML='';
+    uniq.forEach(k=>{ const dt=keyDate(k); const o=document.createElement('option'); o.value=k; o.textContent=`${dt.getFullYear()}/${pad(dt.getMonth()+1)}/${pad(dt.getDate())}（${DOW[dt.getDay()]}）`; sel.appendChild(o); });
+  }
+  const ss=document.getElementById('rng-start'), se=document.getElementById('rng-end');
+  makeOpts(ss); makeOpts(se);
+  ss.value=triggerKey; se.value=triggerKey;
+  ss.onchange=()=>{ if(se.value<ss.value) se.value=ss.value; };
+  se.onchange=()=>{ if(se.value<ss.value) ss.value=se.value; };
+}
+
+function saveMemo(){
+  const txt=document.getElementById('modal-text').value.trim();
+  const sk=document.getElementById('rng-start').value;
+  const ek=document.getElementById('rng-end').value;
+  // 既存編集なら削除
+  if(editMemoId!=null) memos=memos.filter(m=>m.id!==editMemoId);
+  if(txt) memos.push({id:Date.now(),startKey:sk,endKey:ek,text:txt});
+  closeModal(); saveToStorage(); renderAll();
+}
+
+function deleteMemo(){
+  if(editMemoId!=null) memos=memos.filter(m=>m.id!==editMemoId);
+  closeModal(); saveToStorage(); renderAll();
+}
+
+function deleteMemoById(id){
+  memos=memos.filter(m=>m.id!==id);
+  saveToStorage(); renderAll();
+}
+
+function closeModal(){
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('modal').classList.remove('show');
+  editMemoId=null;
+}
+
+// ===== メモ一覧 =====
+function renderMemoList(){
+  const body=document.getElementById('memo-list');
+  if(memos.length===0){ body.innerHTML='<div class="mlist-empty">メモはまだありません</div>'; return; }
+  const sorted=[...memos].sort((a,b)=>a.startKey.localeCompare(b.startKey));
+  body.innerHTML='';
+  const DOW=['日','月','火','水','木','金','土'];
+  sorted.forEach(memo=>{
+    const sd=keyDate(memo.startKey),ed=keyDate(memo.endKey);
+    let dateStr=`${sd.getMonth()+1}/${sd.getDate()}(${DOW[sd.getDay()]})`;
+    if(memo.startKey!==memo.endKey) dateStr+=`〜${ed.getMonth()+1}/${ed.getDate()}(${DOW[ed.getDay()]})`;
+    const item=document.createElement('div'); item.className='mitem';
+    item.innerHTML=`<div class="mitem-date">${dateStr}</div><div class="mitem-text">${memo.text.replace(/\n/g,'<br>')}</div><button class="mitem-del" onclick="deleteMemoById(${memo.id})">✕</button>`;
+    body.appendChild(item);
+  });
+}
+
+// ===== ステータス =====
+function renderStatus(){
+  const {shukkin,yukyuu}=countPeriod(currentYear,currentMonth);
+  const total=shukkin+yukyuu, target=getTarget(), diff=total-target;
+  document.getElementById('st-shukkin').textContent=shukkin+'日';
+  document.getElementById('st-yukyuu').textContent=yukyuu+'日';
+  document.getElementById('st-total').textContent=total+'日';
+  const rEl=document.getElementById('st-remain'), msg=document.getElementById('st-msg');
+  if(diff===0){
+    rEl.textContent='達成！';rEl.className='sval ok';
+    msg.textContent='🎉 目標達成！';msg.className='smsg ok';
+  } else if(diff>0){
+    rEl.textContent=`${diff}日超過`;rEl.className='sval danger';
+    msg.textContent=`⚠ ${diff}日超過`;msg.className='smsg over';
+  } else {
+    rEl.textContent=`あと${-diff}日`;rEl.className='sval warn';
+    msg.textContent=`あと ${-diff} 日必要`;msg.className='smsg warn';
+  }
+}
+
+// ===== 週別サマリー =====
+function renderWeekSummary(){
+  const y=currentYear,m=currentMonth;
+  const {start,end}=getPeriod(y,m);
+  const contract=getContract();
+  const DOW=['日','月','火','水','木','金','土'];
+  const calStart=new Date(start); calStart.setDate(calStart.getDate()-calStart.getDay());
+  const calEnd=new Date(end);     calEnd.setDate(calEnd.getDate()+(6-calEnd.getDay()));
+
+  const weeks=[]; let week=null;
+  const cur=new Date(calStart);
+  while(cur<=calEnd){
+    const dow=cur.getDay();
+    if(dow===0){week={days:[],shukkin:0,yukyuu:0};weeks.push(week);}
+    const cy=cur.getFullYear(),cm=cur.getMonth()+1,cd=cur.getDate();
+    const inP=(cur>=start&&cur<=end);
+    const hol=isHoliday(cy,cm,cd);
+    const wknd=dow===0||dow===6;
+    const k=dk(cy,cm,cd);
+    const state=dayStates[k];
+    const hasMemo=inP&&memosForKey(k).length>0;
+    week.days.push({dow,cd,inP,hol,wknd,state,hasMemo});
+    if(inP&&state==='shukkin')week.shukkin++;
+    if(inP&&state==='yukyuu') week.yukyuu++;
+    cur.setDate(cur.getDate()+1);
+  }
+
+  const body=document.getElementById('week-body'); body.innerHTML='';
+  let idx=0;
+  weeks.forEach(w=>{
+    if(!w.days.some(d=>d.inP)) return;
+    idx++;
+    const row=document.createElement('div'); row.className='wrow';
+    const lbl=document.createElement('div'); lbl.className='wlabel'; lbl.textContent=`第${idx}週`; row.appendChild(lbl);
+    const daysEl=document.createElement('div'); daysEl.className='wdays';
+    w.days.forEach(({dow,cd,inP,hol,wknd,state,hasMemo})=>{
+      const chip=document.createElement('span');
+      const cls=['chip'];
+      chip.textContent=`${DOW[dow]}${cd}`;
+      if(!inP) cls.push('c-out');
+      else if(hol||wknd) cls.push('c-off');
+      else if(state==='shukkin') cls.push('c-shukkin');
+      else if(state==='yukyuu')  cls.push('c-yukyuu');
+      else cls.push('c-off');
+      if(hasMemo) cls.push('c-memo');
+      chip.className=cls.join(' ');
+      daysEl.appendChild(chip);
+    });
+    row.appendChild(daysEl);
+    const act=w.shukkin+w.yukyuu, over=act>contract;
+    const cnt=document.createElement('div'); cnt.className='wcount '+(over?'over':'ok'); cnt.textContent=`${act}/${contract}日`; row.appendChild(cnt);
+    if(over){const wt=document.createElement('span');wt.className='wtag';wt.textContent=' ⚠超過';row.appendChild(wt);}
+    body.appendChild(row);
+  });
+}
+
+// ===== 自動入力 =====
+function autoFill(){
+  const y=currentYear,m=currentMonth;
+  const target=getTarget(),contract=getContract();
+  const days=getPeriodDays(y,m);
+  const {shukkin,yukyuu}=countPeriod(y,m); let total=shukkin+yukyuu;
+  if(total>=target){alert(`すでに${total}日入力済みです（目標${target}日）。リセット後に試してください。`);return;}
+  function wk(dt){ const d=new Date(dt); d.setDate(d.getDate()-d.getDay()); return dateKey(d); }
+  const wc={};
+  days.forEach(d=>{ const k=dk(d.getFullYear(),d.getMonth()+1,d.getDate()); if(dayStates[k]){const w=wk(d);wc[w]=(wc[w]||0)+1;} });
+  for(const d of days){
+    if(total>=target) break;
+    const cy=d.getFullYear(),cm=d.getMonth()+1,cd=d.getDate();
+    const dow=d.getDay();
+    if(dow===0||dow===6) continue;
+    if(isHoliday(cy,cm,cd)) continue;
+    const k=dk(cy,cm,cd);
+    if(dayStates[k]) continue;
+    const w=wk(d);
+    if((wc[w]||0)<contract){ dayStates[k]='shukkin'; wc[w]=(wc[w]||0)+1; total++; }
+  }
+  saveToStorage(); renderAll();
+}
+
+function clearPeriod(){
+  getPeriodDays(currentYear,currentMonth).forEach(d=>{ const k=dk(d.getFullYear(),d.getMonth()+1,d.getDate()); delete dayStates[k]; });
+  saveToStorage(); renderAll();
+}
+
+function prevMonth(){ currentMonth--; if(currentMonth===0){currentMonth=12;currentYear--;} renderAll(); }
+function nextMonth(){ currentMonth++; if(currentMonth===13){currentMonth=1;currentYear++;} renderAll(); }
+
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeModal(); closeRestoreModal(); } });
+
+// ===== 起動 =====
+loadFromStorage();
+renderAll();
+</script>
+</body>
+</html>
