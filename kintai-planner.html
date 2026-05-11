@@ -212,8 +212,9 @@
 
 <!-- 給与・事業ノート連携 -->
 <div class="backup-row">
-  <span class="backup-label">🔗 給与・事業ノート連携　<span style="font-weight:400;font-size:0.68rem">今月の出勤データを給与計算側にコピーできます</span></span>
-  <button class="btn btn-primary" onclick="exportToKinmu()">📤 給与ノートへ書き出し</button>
+  <span class="backup-label">🔗 給与・事業ノート連携</span>
+  <button class="btn btn-primary" onclick="exportToKinmu()">📤 今月の出勤を給与ノートへ</button>
+  <button class="btn btn-secondary" onclick="importYukyuuFromKinmu()">🌿 給与ノートから有給設定を取り込み</button>
 </div>
 
 <!-- 復元モーダル -->
@@ -447,6 +448,26 @@ function restoreFromText(){
 function reloadPage(){ location.reload(); }
 
 // ===== 給与・事業ノート連携 =====
+function importYukyuuFromKinmu(){
+  const text=prompt('給与・事業ノートの「🌿 有給設定を勤怠へ」でコピーしたJSONを貼り付けてください:');
+  if(!text)return;
+  let payload;
+  try{payload=JSON.parse(text.trim());}catch(e){alert('JSONとして読めませんでした:\n'+e.message);return;}
+  if(payload.type!=='yukyuu-setting'||payload.yukyuuTotal==null){
+    alert('有給設定の形式ではありません。\n給与・事業ノートの「🌿 有給設定を勤怠へ」ボタンで出力したJSONを貼り付けてください。');
+    return;
+  }
+  const newTotal=payload.yukyuuTotal;
+  const curTotal=yukyuuTotal!=null?yukyuuTotal+'日':'未設定';
+  if(!confirm('有給付与日数を '+newTotal+' 日に設定します。\n\n現在の設定: '+curTotal+'\n\n進めてよろしいですか？'))return;
+  yukyuuTotal=newTotal;
+  document.getElementById('yukyuu-total').value=newTotal;
+  document.getElementById('yd-total').textContent=newTotal+'日';
+  saveToStorage();
+  renderAll();
+  alert('✅ 有給付与日数を '+newTotal+' 日に設定しました');
+}
+
 function exportToKinmu(){
   const {start,end} = getPeriod(currentYear, currentMonth);
   const dayStatesForPeriod = {};
